@@ -143,4 +143,141 @@ describe('tenant isolation and authorization', () => {
     expect(response.body.tenant.id).toBe('22222222-2222-4222-8222-222222222222');
     expect(response.body.assets.total).toBeGreaterThan(0);
   });
+
+  it('supports tenant-scoped asset CRUD', async () => {
+    const tenant = await createTenant('asset-crud');
+    const token = await getToken(tenant.admin.email, tenant.tenant.slug);
+
+    const created = await request(app)
+      .post('/v1/assets')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'QA Pump 1',
+        type: 'pump',
+        status: 'ok',
+        lat: 40.7,
+        lng: -74.0,
+        installed_at: '2024-01-01',
+        manufacturer: 'QA Works'
+      })
+      .expect(201);
+
+    const assetId = created.body.asset.id as string;
+    expect(created.body.asset.tenant_id).toBe(tenant.tenant.id);
+    expect(created.body.asset.manufacturer).toBe('QA Works');
+
+    const fetched = await request(app)
+      .get(`/v1/assets/${assetId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(fetched.body.asset.name).toBe('QA Pump 1');
+
+    const updated = await request(app)
+      .patch(`/v1/assets/${assetId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'warning', service_window: 'night' })
+      .expect(200);
+    expect(updated.body.asset.status).toBe('warning');
+    expect(updated.body.asset.service_window).toBe('night');
+
+    await request(app)
+      .delete(`/v1/assets/${assetId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(204);
+
+    await request(app)
+      .get(`/v1/assets/${assetId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(404);
+  });
+
+  it('filters and paginates assets within the caller tenant', async () => {
+    const tenant = await createTenant('asset-list');
+    const token = await getToken(tenant.admin.email, tenant.tenant.slug);
+
+    const assets = [
+      { name: 'Valve A', type: 'valve', status: 'ok', installed_at: '2024-01-01' },
+      { name: 'Valve B', type: 'valve', status: 'warning', installed_at: '2024-01-02' },
+      { name: 'Sensor C', type: 'sensor', status: 'warning', installed_at: '2024-01-03' }
+    ];
+
+    for (const asset of assets) {
+      await request(app)
+        .post('/v1/assets')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          ...asset,
+          lat: 35,
+          lng: -80
+        })
+        .expect(201);
+    }
+
+    const warningResponse = await request(app)
+      .get('/v1/assets?status=warning&limit=10')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(warningResponse.body.data).toHaveLength(2);
+    expect(warningResponse.body.data.every((asset: { status: string }) => asset.status === 'warning')).toBe(true);
+
+    const valveResponse = await request(app)
+      .get('/v1/assets?type=valve&limit=10')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(valveResponse.body.data).toHaveLength(2);
+    expect(valveResponse.body.data.every((asset: { type: string }) => asset.type === 'valve')).toBe(true);
+
+    const firstPage = await request(app)
+      .get('/v1/assets?limit=2')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(firstPage.body.data).toHaveLength(2);
+    expect(firstPage.body.next_cursor).toEqual(expect.any(String));
+
+    const secondPage = await request(app)
+      .get(`/v1/assets?limit=2&cursor=${encodeURIComponent(firstPage.body.next_cursor as string)}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(secondPage.body.data).toHaveLength(1);
+    expect(secondPage.body.next_cursor).toBeNull();
+  });
+
+  it('invalidates tenant report cache after asset writes', async () => {
+    const tenant = await createTenant('report-cache');
+    const token = await getToken(tenant.admin.email, tenant.tenant.slug);
+
+    const firstReport = await request(app)
+      .get('/v1/reports/assets/summary')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(firstReport.header['x-cache']).toBe('MISS');
+    expect(firstReport.body.assets.total).toBe(0);
+
+    const cachedReport = await request(app)
+      .get('/v1/reports/assets/summary')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(cachedReport.header['x-cache']).toBe('HIT');
+
+    await request(app)
+      .post('/v1/assets')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'Cache Test Sensor',
+        type: 'sensor',
+        status: 'critical',
+        lat: 39,
+        lng: -77,
+        installed_at: '2024-03-01'
+      })
+      .expect(201);
+
+    const refreshedReport = await request(app)
+      .get('/v1/reports/assets/summary')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(refreshedReport.header['x-cache']).toBe('MISS');
+    expect(refreshedReport.body.assets.total).toBe(1);
+    expect(refreshedReport.body.assets.by_status.critical).toBe(1);
+  });
 });
