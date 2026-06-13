@@ -3,7 +3,33 @@ import { ZodError } from 'zod';
 import { AppError } from '../shared/errors.js';
 import { logger } from '../shared/logger.js';
 
+type ExpressError = Error & { status?: number; statusCode?: number };
+
 export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction): void {
+  // Handle payload too large errors (413)
+  if (err instanceof Error && err.message.includes('payload too large')) {
+    res.status(413).json({
+      error: {
+        code: 'payload_too_large',
+        message: 'Request payload exceeds maximum allowed size',
+        request_id: req.requestId
+      }
+    });
+    return;
+  }
+
+  // Handle invalid JSON errors (400)
+  if (err instanceof Error && err.message.includes('JSON')) {
+    res.status(400).json({
+      error: {
+        code: 'invalid_json',
+        message: 'Invalid JSON in request body',
+        request_id: req.requestId
+      }
+    });
+    return;
+  }
+
   if (err instanceof ZodError) {
     res.status(400).json({
       error: {
