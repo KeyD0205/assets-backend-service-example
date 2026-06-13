@@ -14,8 +14,9 @@
     "seed": "tsx src/scripts/seed.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:up": "docker compose up -d postgres mongo",
-    "db:down": "docker compose down -v"
+    "db:up": "docker compose up -d --wait postgres mongo",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v"
   },
   "dependencies": {
     "cors": "^2.8.5",

@@ -42,6 +42,8 @@ npm run dev
 
 If `5432` or `27017` is already in use, change `POSTGRES_PORT` or `MONGO_PORT` in `.env` before running `npm run db:up`, and update `DATABASE_URL` or `MONGO_URL` to match.
 
+To stop the databases without deleting data, run `npm run db:down`. To remove database volumes and start from a clean slate, run `npm run db:reset`.
+
 Health check:
 
 ```bash
