@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit';
 import { env } from './config/env.js';
 import './shared/requestContext.js';
 import { requestId } from './middleware/requestId.js';
+import { inputSanitization } from './middleware/inputSanitization.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { notFoundHandler } from './middleware/notFound.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
@@ -21,6 +22,7 @@ export function buildApp(): express.Express {
   app.use(helmet());
   app.use(cors({ origin: env.CORS_ORIGIN === '*' ? true : env.CORS_ORIGIN }));
   app.use(express.json({ limit: '1mb' }));
+  app.use(inputSanitization);
 
   if (env.ENABLE_RATE_LIMIT) {
     app.use(rateLimit({
