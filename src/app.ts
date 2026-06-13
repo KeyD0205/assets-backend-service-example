@@ -12,6 +12,7 @@ import { getCorsOptions } from './middleware/corsConfig.js';
 import { getHelmetOptions } from './middleware/helmetConfig.js';
 import { cspReportHandler } from './middleware/cspReportHandler.js';
 import { createBodyLimiter, BODY_SIZE_LIMITS, dynamicBodyLimiter } from './middleware/bodySizeLimit.js';
+import { httpsEnforcement } from './middleware/httpsEnforcement.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { tenantRoutes } from './modules/tenants/tenant.routes.js';
 import { userRoutes } from './modules/users/user.routes.js';
@@ -25,6 +26,7 @@ export function buildApp(): express.Express {
   app.use(requestId);
   app.use(helmet(getHelmetOptions()));
   app.use(cors(getCorsOptions()));
+  app.use(httpsEnforcement);
   // Apply dynamic body size limits based on request path
   app.use(dynamicBodyLimiter);
   app.use(inputSanitization);
