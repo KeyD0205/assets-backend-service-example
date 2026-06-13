@@ -42,7 +42,8 @@ export function httpsEnforcement(req: Request, res: Response, next: NextFunction
       'Redirecting HTTP request to HTTPS'
     );
 
-    return res.redirect(301, redirectUrl);
+    res.redirect(301, redirectUrl);
+    return;
   }
 
   // x-forwarded-proto header missing in production - this is a misconfiguration
@@ -90,7 +91,8 @@ export function httpsEnforcementStrict(req: Request, res: Response, next: NextFu
       },
       'Redirecting HTTP request to HTTPS'
     );
-    return res.redirect(301, redirectUrl);
+    res.redirect(301, redirectUrl);
+    return;
   }
 
   // Header missing - reject with 400
@@ -103,11 +105,12 @@ export function httpsEnforcementStrict(req: Request, res: Response, next: NextFu
     'x-forwarded-proto header required but missing - reverse proxy misconfigured'
   );
 
-  return res.status(400).json({
+  res.status(400).json({
     error: {
       code: 'missing_proxy_header',
       message: 'Invalid request - reverse proxy configuration required',
       request_id: req.requestId
     }
   });
+  return;
 }

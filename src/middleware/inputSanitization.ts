@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
+import type { ParsedQs } from 'qs';
 import { badRequest } from '../shared/errors.js';
 
 function sanitizeObject(obj: unknown): unknown {
@@ -25,7 +26,7 @@ function sanitizeObject(obj: unknown): unknown {
 export function inputSanitization(req: Request, _res: Response, next: NextFunction): void {
   try {
     if (req.body) req.body = sanitizeObject(req.body);
-    if (req.query) req.query = sanitizeObject(req.query);
+    if (req.query) req.query = sanitizeObject(req.query) as ParsedQs;
     next();
   } catch (err) {
     next(err);

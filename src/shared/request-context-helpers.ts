@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import type { RequestContext } from './request-context.js';
+import type { RequestContext } from './requestContext.js';
 import { unauthorized } from './errors.js';
 
 /**

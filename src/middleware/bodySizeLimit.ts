@@ -6,7 +6,7 @@ import express from 'express';
  * Helps prevent abuse and memory exhaustion attacks
  * Global default is 50kb - routes needing more explicitly override
  */
-export const BODY_SIZE_LIMITS = {
+export const BODY_SIZE_LIMITS: Record<string, string> = {
   // Authentication operations - small payloads (email + tenant info)
   AUTH: '20kb',
   
