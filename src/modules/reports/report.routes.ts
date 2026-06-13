@@ -3,6 +3,7 @@ import { authenticate } from '../../middleware/auth.js';
 import { asyncHandler } from '../../shared/asyncHandler.js';
 import { cache } from '../../shared/cache.js';
 import { notFound } from '../../shared/errors.js';
+import { getRequestContext } from '../../shared/request-context-helpers.js';
 import { AssetRepository } from '../assets/asset.repository.js';
 import { TenantRepository } from '../tenants/tenant.repository.js';
 
@@ -24,7 +25,8 @@ type AssetSummaryReport = {
 router.use(authenticate);
 
 router.get('/assets/summary', asyncHandler(async (req, res) => {
-  const cacheKey = `tenant:${req.ctx!.tenantId}:reports:assets-summary:v1`;
+  const ctx = getRequestContext(req);
+  const cacheKey = `tenant:${ctx.tenantId}:reports:assets-summary:v1`;
   const cached = cache.get<AssetSummaryReport>(cacheKey);
   if (cached) {
     res.setHeader('x-cache', 'HIT');
@@ -32,10 +34,10 @@ router.get('/assets/summary', asyncHandler(async (req, res) => {
     return;
   }
 
-  const tenant = await tenantRepository.findById(req.ctx!.tenantId);
+  const tenant = await tenantRepository.findById(ctx.tenantId);
   if (!tenant) throw notFound('Tenant');
 
-  const summary = await assetRepository.summaryByTenant(req.ctx!.tenantId);
+  const summary = await assetRepository.summaryByTenant(ctx.tenantId);
   const report: AssetSummaryReport = {
     tenant: {
       id: tenant.id,

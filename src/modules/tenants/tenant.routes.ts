@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticate } from '../../middleware/auth.js';
 import { asyncHandler } from '../../shared/asyncHandler.js';
 import { notFound } from '../../shared/errors.js';
+import { getRequestContext } from '../../shared/request-context-helpers.js';
 import { parseBody } from '../../shared/validation.js';
 import { toPublicUser } from '../users/user.types.js';
 import { TenantRepository } from './tenant.repository.js';
@@ -20,7 +21,8 @@ router.post('/', asyncHandler(async (req, res) => {
 }));
 
 router.get('/me', authenticate, asyncHandler(async (req, res) => {
-  const tenant = await tenantRepository.findById(req.ctx!.tenantId);
+  const ctx = getRequestContext(req);
+  const tenant = await tenantRepository.findById(ctx.tenantId);
   if (!tenant) throw notFound('Tenant');
   res.json({ tenant });
 }));
