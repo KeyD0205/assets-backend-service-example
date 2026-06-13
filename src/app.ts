@@ -8,6 +8,9 @@ import { requestId } from './middleware/requestId.js';
 import { inputSanitization } from './middleware/inputSanitization.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { notFoundHandler } from './middleware/notFound.js';
+import { getCorsOptions } from './middleware/corsConfig.js';
+import { getHelmetOptions } from './middleware/helmetConfig.js';
+import { cspReportHandler } from './middleware/cspReportHandler.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { tenantRoutes } from './modules/tenants/tenant.routes.js';
 import { userRoutes } from './modules/users/user.routes.js';
@@ -19,8 +22,8 @@ export function buildApp(): express.Express {
 
   app.disable('x-powered-by');
   app.use(requestId);
-  app.use(helmet());
-  app.use(cors({ origin: env.CORS_ORIGIN === '*' ? true : env.CORS_ORIGIN }));
+  app.use(helmet(getHelmetOptions()));
+  app.use(cors(getCorsOptions()));
   app.use(express.json({ limit: '1mb' }));
   app.use(inputSanitization);
 
@@ -36,6 +39,8 @@ export function buildApp(): express.Express {
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });
   });
+
+  app.post('/security/csp-report', express.json({ type: 'application/csp-report' }), cspReportHandler);
 
   app.use('/v1/auth', authRoutes);
   app.use('/v1/tenants', tenantRoutes);
