@@ -280,4 +280,109 @@ describe('tenant isolation and authorization', () => {
     expect(refreshedReport.body.assets.total).toBe(1);
     expect(refreshedReport.body.assets.by_status.critical).toBe(1);
   });
+
+  it('allows admins to manage users inside their tenant', async () => {
+    const tenant = await createTenant('user-admin');
+    const adminToken = await getToken(tenant.admin.email, tenant.tenant.slug);
+    const userEmail = `editor-${tenant.tenant.slug}@qa.test`;
+
+    const created = await request(app)
+      .post('/v1/users')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'QA Editor',
+        email: userEmail,
+        password: testPassword,
+        role: 'editor'
+      })
+      .expect(201);
+    expect(created.body.user.email).toBe(userEmail);
+    expect(created.body.user.role).toBe('editor');
+
+    const userId = created.body.user.id as string;
+    const updated = await request(app)
+      .patch(`/v1/users/${userId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ role: 'viewer', name: 'QA Viewer' })
+      .expect(200);
+    expect(updated.body.user.role).toBe('viewer');
+    expect(updated.body.user.name).toBe('QA Viewer');
+
+    await request(app)
+      .delete(`/v1/users/${userId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(204);
+
+    await request(app)
+      .get(`/v1/users/${userId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(404);
+  });
+
+  it('prevents non-admins from managing users', async () => {
+    const tenant = await createTenant('user-role');
+    const adminToken = await getToken(tenant.admin.email, tenant.tenant.slug);
+
+    const created = await request(app)
+      .post('/v1/users')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'QA Editor',
+        email: `editor-${tenant.tenant.slug}@qa.test`,
+        password: testPassword,
+        role: 'editor'
+      })
+      .expect(201);
+
+    const editorToken = await getToken(created.body.user.email as string, tenant.tenant.slug);
+    await request(app)
+      .post('/v1/users')
+      .set('Authorization', `Bearer ${editorToken}`)
+      .send({
+        name: 'Unauthorized User',
+        email: `unauthorized-${tenant.tenant.slug}@qa.test`,
+        password: testPassword,
+        role: 'viewer'
+      })
+      .expect(403);
+
+    await request(app)
+      .patch(`/v1/users/${created.body.user.id}`)
+      .set('Authorization', `Bearer ${editorToken}`)
+      .send({ role: 'viewer' })
+      .expect(403);
+  });
+
+  it('protects self-delete and last-admin role changes', async () => {
+    const tenant = await createTenant('last-admin');
+    const adminToken = await getToken(tenant.admin.email, tenant.tenant.slug);
+
+    await request(app)
+      .delete(`/v1/users/${tenant.admin.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(403);
+
+    await request(app)
+      .patch(`/v1/users/${tenant.admin.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ role: 'viewer' })
+      .expect(400);
+
+    const secondAdmin = await request(app)
+      .post('/v1/users')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'Second Admin',
+        email: `second-admin-${tenant.tenant.slug}@qa.test`,
+        password: testPassword,
+        role: 'admin'
+      })
+      .expect(201);
+
+    await request(app)
+      .patch(`/v1/users/${secondAdmin.body.user.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ role: 'viewer' })
+      .expect(200);
+  });
 });
