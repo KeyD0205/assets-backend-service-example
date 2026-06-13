@@ -9,13 +9,44 @@ type TokenResponse = {
 };
 
 const app = buildApp();
+const testPassword = 'password123';
+
+type TenantResponse = {
+  tenant: {
+    id: string;
+    slug: string;
+  };
+  admin: {
+    id: string;
+    email: string;
+  };
+};
 
 async function getToken(email: string, tenant_slug: string): Promise<string> {
   const response = await request(app)
     .post('/v1/auth/tokens')
-    .send({ email, tenant_slug, password: 'password123' })
+    .send({ email, tenant_slug, password: testPassword })
     .expect(201);
   return (response.body as TokenResponse).access_token;
+}
+
+async function createTenant(prefix: string): Promise<TenantResponse> {
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const slug = `${prefix}-${suffix}`;
+  const response = await request(app)
+    .post('/v1/tenants')
+    .send({
+      name: `QA ${prefix} ${suffix}`,
+      slug,
+      admin: {
+        name: 'QA Admin',
+        email: `admin-${prefix}-${suffix}@qa.test`,
+        password: testPassword
+      }
+    })
+    .expect(201);
+
+  return response.body as TenantResponse;
 }
 
 beforeAll(async () => {
