@@ -71,6 +71,28 @@ describe('tenant isolation and authorization', () => {
       .expect(401);
   });
 
+  it('rejects token issuance for a valid user in the wrong tenant', async () => {
+    await request(app)
+      .post('/v1/auth/tokens')
+      .send({
+        email: 'amelia@northwind.test',
+        tenant_slug: 'beacon-sensors',
+        password: testPassword
+      })
+      .expect(401);
+  });
+
+  it('rejects missing and malformed bearer tokens', async () => {
+    await request(app)
+      .get('/v1/assets')
+      .expect(401);
+
+    await request(app)
+      .get('/v1/assets')
+      .set('Authorization', 'Bearer not-a-jwt')
+      .expect(401);
+  });
+
   it('lists only the calling tenant assets', async () => {
     const token = await getToken('amelia@northwind.test', 'northwind-utilities');
 
@@ -113,6 +135,64 @@ describe('tenant isolation and authorization', () => {
       .expect(400);
 
     expect(response.body.error.code).toBe('bad_request');
+  });
+
+  it('rejects invalid asset core fields', async () => {
+    const token = await getToken('sam@northwind.test', 'northwind-utilities');
+
+    const response = await request(app)
+      .post('/v1/assets')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'invalid-core-asset',
+        type: 'sensor',
+        status: 'offline',
+        lat: 120,
+        lng: -190,
+        installed_at: '01-01-2026'
+      })
+      .expect(400);
+
+    expect(response.body.error.code).toBe('validation_error');
+    expect(response.body.error.details.map((detail: { field: string }) => detail.field)).toEqual(
+      expect.arrayContaining(['status', 'lat', 'lng', 'installed_at'])
+    );
+  });
+
+  it('rejects unsafe nested asset keys', async () => {
+    const token = await getToken('sam@northwind.test', 'northwind-utilities');
+
+    await request(app)
+      .post('/v1/assets')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'unsafe-asset',
+        type: 'sensor',
+        status: 'ok',
+        lat: 42.36,
+        lng: -71.09,
+        installed_at: '2026-01-01',
+        metadata: {
+          '$where': 'this.status === "ok"'
+        }
+      })
+      .expect(400);
+
+    await request(app)
+      .post('/v1/assets')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'dotted-asset',
+        type: 'sensor',
+        status: 'ok',
+        lat: 42.36,
+        lng: -71.09,
+        installed_at: '2026-01-01',
+        metadata: {
+          'profile.name': 'bad'
+        }
+      })
+      .expect(400);
   });
 
   it('prevents viewers from mutating assets', async () => {
