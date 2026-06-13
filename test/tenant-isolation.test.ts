@@ -13,7 +13,7 @@ const app = buildApp();
 async function getToken(email: string, tenant_slug: string): Promise<string> {
   const response = await request(app)
     .post('/v1/auth/tokens')
-    .send({ email, tenant_slug })
+    .send({ email, tenant_slug, password: 'password123' })
     .expect(201);
   return (response.body as TokenResponse).access_token;
 }
@@ -29,6 +29,17 @@ afterAll(async () => {
 });
 
 describe('tenant isolation and authorization', () => {
+  it('rejects token issuance with an invalid password', async () => {
+    await request(app)
+      .post('/v1/auth/tokens')
+      .send({
+        email: 'amelia@northwind.test',
+        tenant_slug: 'northwind-utilities',
+        password: 'wrong-password'
+      })
+      .expect(401);
+  });
+
   it('lists only the calling tenant assets', async () => {
     const token = await getToken('amelia@northwind.test', 'northwind-utilities');
 

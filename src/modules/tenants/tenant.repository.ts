@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { pgPool } from '../../db/postgres.js';
 import { conflict, notFound } from '../../shared/errors.js';
+import { hashPassword } from '../../shared/passwords.js';
 import type { Role } from '../../shared/roles.js';
 import type { Tenant } from './tenant.types.js';
 import type { User } from '../users/user.types.js';
@@ -35,13 +36,14 @@ export class TenantRepository {
   async createWithAdmin(input: {
     name: string;
     slug: string;
-    admin: { name: string; email: string };
+    admin: { name: string; email: string; password: string };
   }): Promise<{ tenant: Tenant; admin: User }> {
     const client = await pgPool.connect();
     try {
       await client.query('BEGIN');
       const tenantId = randomUUID();
       const adminId = randomUUID();
+      const passwordHash = await hashPassword(input.admin.password);
 
       const tenantResult = await client.query(
         `INSERT INTO tenants (id, name, slug)
@@ -51,10 +53,10 @@ export class TenantRepository {
       );
 
       const adminResult = await client.query(
-        `INSERT INTO users (id, tenant_id, name, email, role)
-         VALUES ($1, $2, $3, $4, 'admin')
+        `INSERT INTO users (id, tenant_id, name, email, password_hash, role)
+         VALUES ($1, $2, $3, $4, $5, 'admin')
          RETURNING id, tenant_id, name, email, role, created_at`,
-        [adminId, tenantId, input.admin.name, input.admin.email.toLowerCase()]
+        [adminId, tenantId, input.admin.name, input.admin.email.toLowerCase(), passwordHash]
       );
 
       await client.query('COMMIT');

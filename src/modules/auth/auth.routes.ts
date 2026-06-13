@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { env } from '../../config/env.js';
 import { asyncHandler } from '../../shared/asyncHandler.js';
 import { conflict, unauthorized } from '../../shared/errors.js';
+import { verifyPassword } from '../../shared/passwords.js';
 import { parseBody } from '../../shared/validation.js';
 import { UserRepository } from '../users/user.repository.js';
 import { toPublicUser } from '../users/user.types.js';
@@ -23,6 +24,9 @@ router.post('/tokens', asyncHandler(async (req, res) => {
 
   const user = matches[0];
   if (!user) throw unauthorized('Invalid credentials');
+  if (!(await verifyPassword(body.password, user.password_hash))) {
+    throw unauthorized('Invalid credentials');
+  }
 
   const accessToken = jwt.sign(
     { sub: user.id, tenant_id: user.tenant_id },

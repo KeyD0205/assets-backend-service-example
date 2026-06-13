@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { pgPool } from '../../db/postgres.js';
 import { badRequest, conflict, notFound } from '../../shared/errors.js';
+import { hashPassword } from '../../shared/passwords.js';
 import type { Role } from '../../shared/roles.js';
 import { mapUser } from '../tenants/tenant.repository.js';
 import type { User } from './user.types.js';
 
 type PgError = { code?: string; constraint?: string };
+export type AuthUser = User & { password_hash: string };
 
 function isUniqueViolation(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as PgError).code === '23505';
@@ -23,7 +25,7 @@ export class UserRepository {
     return row ? mapUser(row) : null;
   }
 
-  async findForAuth(email: string, tenantSlug?: string, tenantId?: string): Promise<User[]> {
+  async findForAuth(email: string, tenantSlug?: string, tenantId?: string): Promise<AuthUser[]> {
     const params: unknown[] = [email.toLowerCase()];
     let tenantClause = '';
     if (tenantSlug) {
@@ -36,14 +38,17 @@ export class UserRepository {
     }
 
     const result = await pgPool.query(
-      `SELECT u.id, u.tenant_id, u.name, u.email, u.role, u.created_at
+      `SELECT u.id, u.tenant_id, u.name, u.email, u.role, u.created_at, u.password_hash
        FROM users u
        JOIN tenants t ON t.id = u.tenant_id
        WHERE u.email = $1 ${tenantClause}
        ORDER BY u.created_at ASC`,
       params
     );
-    return result.rows.map(row => mapUser(row));
+    return result.rows.map(row => ({
+      ...mapUser(row),
+      password_hash: String((row as Record<string, unknown>).password_hash)
+    }));
   }
 
   async listByTenant(tenantId: string, input: { limit: number; cursor?: { created_at: string; id: string } }): Promise<User[]> {
@@ -67,13 +72,14 @@ export class UserRepository {
     return result.rows.map(row => mapUser(row));
   }
 
-  async createInTenant(tenantId: string, input: { name: string; email: string; role: Role }): Promise<User> {
+  async createInTenant(tenantId: string, input: { name: string; email: string; password: string; role: Role }): Promise<User> {
     try {
+      const passwordHash = await hashPassword(input.password);
       const result = await pgPool.query(
-        `INSERT INTO users (id, tenant_id, name, email, role)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO users (id, tenant_id, name, email, password_hash, role)
+         VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING id, tenant_id, name, email, role, created_at`,
-        [randomUUID(), tenantId, input.name, input.email.toLowerCase(), input.role]
+        [randomUUID(), tenantId, input.name, input.email.toLowerCase(), passwordHash, input.role]
       );
       return mapUser(result.rows[0]);
     } catch (err) {
@@ -85,7 +91,7 @@ export class UserRepository {
   async updateInTenant(
     tenantId: string,
     userId: string,
-    patch: Partial<{ name: string; email: string; role: Role }>
+    patch: Partial<{ name: string; email: string; password: string; role: Role }>
   ): Promise<User> {
     if (Object.keys(patch).length === 0) throw badRequest('At least one field must be provided');
 
@@ -98,6 +104,10 @@ export class UserRepository {
     if (patch.email !== undefined) {
       params.push(patch.email.toLowerCase());
       sets.push(`email = $${params.length}`);
+    }
+    if (patch.password !== undefined) {
+      params.push(await hashPassword(patch.password));
+      sets.push(`password_hash = $${params.length}`);
     }
     if (patch.role !== undefined) {
       params.push(patch.role);

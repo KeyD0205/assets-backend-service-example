@@ -4,7 +4,7 @@ A backend implementation for the technical assignment: Node.js / Express / TypeS
 
 ## Design summary
 
-The service uses Postgres for data that benefits from relational constraints: tenants, users, and roles. The provided relational seed file creates `tenants` and `users`, enforces a single role per user, and includes a tenant-scoped unique email constraint.
+The service uses Postgres for data that benefits from relational constraints: tenants, users, credential hashes, and roles. The provided relational seed file creates `tenants` and `users`, enforces a single role per user, and includes a tenant-scoped unique email constraint.
 
 MongoDB stores assets because assets share a common core shape but each tenant can add different fields. The service validates the core shape strictly and allows tenant-specific extensions while rejecting protected fields such as `tenant_id`, `id`, `_id`, and timestamps.
 
@@ -51,7 +51,7 @@ Get a token:
 ```bash
 curl -s -X POST http://localhost:3000/v1/auth/tokens \
   -H 'content-type: application/json' \
-  -d '{"email":"amelia@northwind.test","tenant_slug":"northwind-utilities"}'
+  -d '{"email":"amelia@northwind.test","password":"password123","tenant_slug":"northwind-utilities"}'
 ```
 
 Use the returned token:
@@ -76,6 +76,7 @@ Request:
 ```json
 {
   "email": "amelia@northwind.test",
+  "password": "password123",
   "tenant_slug": "northwind-utilities"
 }
 ```
@@ -112,7 +113,8 @@ Onboarding request:
   "slug": "acme-utilities",
   "admin": {
     "name": "Alex Admin",
-    "email": "alex@acme.test"
+    "email": "alex@acme.test",
+    "password": "change-me-please"
   }
 }
 ```
@@ -217,7 +219,7 @@ db.assets.createIndex({ tenant_id: 1, status: 1 })
 db.assets.createIndex({ tenant_id: 1, installed_at: -1, id: 1 })
 ```
 
-Postgres constraints and indexes are defined by `data/tenants.seed.sql`, including tenant primary keys, tenant slug uniqueness, user tenant foreign key, role check, tenant-scoped unique email, and `idx_users_tenant_id`.
+Postgres constraints and indexes are defined by `data/tenants.seed.sql`, including tenant primary keys, tenant slug uniqueness, user tenant foreign key, role check, tenant-scoped unique email, password hashes, and `idx_users_tenant_id`.
 
 ## Tests
 
@@ -239,7 +241,7 @@ The tests focus on the highest-risk behavior:
 
 ## Notes and trade-offs
 
-- Authentication is intentionally simple because OAuth/SSO is out of scope. Tokens are signed JWTs, but role and tenant membership are loaded from Postgres on every request so user changes take effect immediately.
+- Authentication is intentionally simple because OAuth/SSO is out of scope. Users authenticate with email, tenant, and password. Tokens are signed JWTs, but role and tenant membership are loaded from Postgres on every request so user changes take effect immediately.
 - Asset documents are flexible, but ownership and identity fields are immutable from API input.
 - Reports are eventually consistent with respect to cache TTL. Asset writes invalidate the current tenant's report cache.
 - The seed script is intentionally destructive and refuses to run in production.
