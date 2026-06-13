@@ -34,11 +34,13 @@ Tenant isolation is enforced by the auth middleware and repository contracts:
 
 ```bash
 cp .env.example .env
-npm install
+npm ci
 npm run db:up
 npm run seed
 npm run dev
 ```
+
+If `5432` or `27017` is already in use, change `POSTGRES_PORT` or `MONGO_PORT` in `.env` before running `npm run db:up`, and update `DATABASE_URL` or `MONGO_URL` to match.
 
 Health check:
 
