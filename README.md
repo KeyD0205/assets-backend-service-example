@@ -214,12 +214,13 @@ MongoDB indexes are created on startup and during seeding:
 
 ```js
 db.assets.createIndex({ tenant_id: 1, id: 1 }, { unique: true })
-db.assets.createIndex({ tenant_id: 1, type: 1, status: 1, id: 1 })
-db.assets.createIndex({ tenant_id: 1, status: 1 })
+db.assets.createIndex({ tenant_id: 1, type: 1, installed_at: -1, id: 1 })
+db.assets.createIndex({ tenant_id: 1, status: 1, installed_at: -1, id: 1 })
+db.assets.createIndex({ tenant_id: 1, type: 1, status: 1, installed_at: -1, id: 1 })
 db.assets.createIndex({ tenant_id: 1, installed_at: -1, id: 1 })
 ```
 
-Postgres constraints and indexes are defined by `data/tenants.seed.sql`, including tenant primary keys, tenant slug uniqueness, user tenant foreign key, role check, tenant-scoped unique email, password hashes, and `idx_users_tenant_id`.
+Postgres constraints and indexes are defined by `data/tenants.seed.sql`, including tenant primary keys, tenant slug uniqueness, user tenant foreign key, role check, tenant-scoped unique email, password hashes, `idx_users_tenant_id`, and `idx_users_tenant_created_id`.
 
 ## Tests
 

@@ -48,8 +48,9 @@ export async function ensureMongoIndexes(): Promise<void> {
   const collection = mongoDb().collection<AssetDocument>('assets');
   await Promise.all([
     collection.createIndex({ tenant_id: 1, id: 1 }, { unique: true, name: 'uniq_assets_tenant_id_id' }),
-    collection.createIndex({ tenant_id: 1, type: 1, status: 1, id: 1 }, { name: 'idx_assets_tenant_type_status_id' }),
-    collection.createIndex({ tenant_id: 1, status: 1 }, { name: 'idx_assets_tenant_status' }),
+    collection.createIndex({ tenant_id: 1, type: 1, installed_at: -1, id: 1 }, { name: 'idx_assets_tenant_type_installed_id' }),
+    collection.createIndex({ tenant_id: 1, status: 1, installed_at: -1, id: 1 }, { name: 'idx_assets_tenant_status_installed_id' }),
+    collection.createIndex({ tenant_id: 1, type: 1, status: 1, installed_at: -1, id: 1 }, { name: 'idx_assets_tenant_type_status_installed_id' }),
     collection.createIndex({ tenant_id: 1, installed_at: -1, id: 1 }, { name: 'idx_assets_tenant_installed_id' })
   ]);
 }

@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_tenant_id ON users(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_users_tenant_created_id ON users(tenant_id, created_at DESC, id ASC);
 
 -- Tenants
 INSERT INTO tenants (id, name, slug, created_at) VALUES
