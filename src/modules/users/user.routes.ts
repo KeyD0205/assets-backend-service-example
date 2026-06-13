@@ -49,14 +49,6 @@ router.patch('/:userId', requireMinimumRole('admin'), asyncHandler(async (req, r
   }
 
   const body = parseBody(updateUserSchema, req);
-  const existing = await userRepository.findByIdInTenant(req.ctx!.tenantId, userId);
-  if (!existing) throw notFound('User');
-
-  if (existing.role === 'admin' && body.role && body.role !== 'admin') {
-    const adminCount = await userRepository.countAdmins(req.ctx!.tenantId);
-    if (adminCount <= 1) throw badRequest('Cannot demote the last admin in a tenant');
-  }
-
   const user = await userRepository.updateInTenant(req.ctx!.tenantId, userId, body);
   res.json({ user: toPublicUser(user) });
 }));
@@ -64,14 +56,6 @@ router.patch('/:userId', requireMinimumRole('admin'), asyncHandler(async (req, r
 router.delete('/:userId', requireMinimumRole('admin'), asyncHandler(async (req, res) => {
   const userId = userIdParamSchema.parse(req.params.userId);
   if (userId === req.ctx!.userId) throw forbidden('Users cannot delete themselves');
-
-  const existing = await userRepository.findByIdInTenant(req.ctx!.tenantId, userId);
-  if (!existing) throw notFound('User');
-
-  if (existing.role === 'admin') {
-    const adminCount = await userRepository.countAdmins(req.ctx!.tenantId);
-    if (adminCount <= 1) throw badRequest('Cannot delete the last admin in a tenant');
-  }
 
   await userRepository.deleteInTenant(req.ctx!.tenantId, userId);
   res.status(204).send();

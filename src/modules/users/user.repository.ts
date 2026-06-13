@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type pg from 'pg';
 import { pgPool } from '../../db/postgres.js';
 import { badRequest, conflict, notFound } from '../../shared/errors.js';
 import { hashPassword } from '../../shared/passwords.js';
@@ -95,6 +96,7 @@ export class UserRepository {
   ): Promise<User> {
     if (Object.keys(patch).length === 0) throw badRequest('At least one field must be provided');
 
+    const client = await pgPool.connect();
     const sets: string[] = [];
     const params: unknown[] = [];
     if (patch.name !== undefined) {
@@ -118,7 +120,25 @@ export class UserRepository {
     const userParam = params.length;
 
     try {
-      const result = await pgPool.query(
+      await client.query('BEGIN');
+      const lockedAdminCount = patch.role !== undefined && patch.role !== 'admin'
+        ? await this.lockTenantAdmins(client, tenantId)
+        : undefined;
+      const existingResult = await client.query(
+        `SELECT id, role
+         FROM users
+         WHERE tenant_id = $1 AND id = $2
+         FOR UPDATE`,
+        [tenantId, userId]
+      );
+      const existing = existingResult.rows[0] as { role: Role } | undefined;
+      if (!existing) throw notFound('User');
+
+      if (existing.role === 'admin' && lockedAdminCount !== undefined && lockedAdminCount <= 1) {
+        throw badRequest('Cannot remove the last admin in a tenant');
+      }
+
+      const result = await client.query(
         `UPDATE users
          SET ${sets.join(', ')}
          WHERE tenant_id = $${tenantParam} AND id = $${userParam}
@@ -127,23 +147,56 @@ export class UserRepository {
       );
       const row = result.rows[0] as Record<string, unknown> | undefined;
       if (!row) throw notFound('User');
+      await client.query('COMMIT');
       return mapUser(row);
     } catch (err) {
+      await client.query('ROLLBACK');
       if (isUniqueViolation(err)) throw conflict('A user with this email already exists in this tenant');
       throw err;
+    } finally {
+      client.release();
     }
   }
 
   async deleteInTenant(tenantId: string, userId: string): Promise<void> {
-    const result = await pgPool.query('DELETE FROM users WHERE tenant_id = $1 AND id = $2', [tenantId, userId]);
-    if (result.rowCount === 0) throw notFound('User');
+    const client = await pgPool.connect();
+    try {
+      await client.query('BEGIN');
+      const lockedAdminCount = await this.lockTenantAdmins(client, tenantId);
+      const existingResult = await client.query(
+        `SELECT id, role
+         FROM users
+         WHERE tenant_id = $1 AND id = $2
+         FOR UPDATE`,
+        [tenantId, userId]
+      );
+      const existing = existingResult.rows[0] as { role: Role } | undefined;
+      if (!existing) throw notFound('User');
+
+      if (existing.role === 'admin' && lockedAdminCount <= 1) {
+        throw badRequest('Cannot remove the last admin in a tenant');
+      }
+
+      const result = await client.query('DELETE FROM users WHERE tenant_id = $1 AND id = $2', [tenantId, userId]);
+      if (result.rowCount === 0) throw notFound('User');
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
-  async countAdmins(tenantId: string): Promise<number> {
-    const result = await pgPool.query(
-      `SELECT COUNT(*)::int AS count FROM users WHERE tenant_id = $1 AND role = 'admin'`,
+  private async lockTenantAdmins(client: pg.PoolClient, tenantId: string): Promise<number> {
+    const result = await client.query(
+      `SELECT id
+       FROM users
+       WHERE tenant_id = $1 AND role = 'admin'
+       ORDER BY id
+       FOR UPDATE`,
       [tenantId]
     );
-    return Number(result.rows[0]?.count ?? 0);
+    return result.rowCount ?? 0;
   }
 }
