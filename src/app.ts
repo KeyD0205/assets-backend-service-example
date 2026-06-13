@@ -11,6 +11,7 @@ import { notFoundHandler } from './middleware/notFound.js';
 import { getCorsOptions } from './middleware/corsConfig.js';
 import { getHelmetOptions } from './middleware/helmetConfig.js';
 import { cspReportHandler } from './middleware/cspReportHandler.js';
+import { createBodyLimiter, BODY_SIZE_LIMITS, dynamicBodyLimiter } from './middleware/bodySizeLimit.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { tenantRoutes } from './modules/tenants/tenant.routes.js';
 import { userRoutes } from './modules/users/user.routes.js';
@@ -24,7 +25,8 @@ export function buildApp(): express.Express {
   app.use(requestId);
   app.use(helmet(getHelmetOptions()));
   app.use(cors(getCorsOptions()));
-  app.use(express.json({ limit: '1mb' }));
+  // Apply dynamic body size limits based on request path
+  app.use(dynamicBodyLimiter);
   app.use(inputSanitization);
 
   if (env.ENABLE_RATE_LIMIT) {
@@ -42,10 +44,13 @@ export function buildApp(): express.Express {
 
   app.post('/security/csp-report', express.json({ type: 'application/csp-report' }), cspReportHandler);
 
+  // Routes with size limits configured in dynamicBodyLimiter
   app.use('/v1/auth', authRoutes);
+  app.use('/v1/assets', assetRoutes);
+  
+  // Standard routes
   app.use('/v1/tenants', tenantRoutes);
   app.use('/v1/users', userRoutes);
-  app.use('/v1/assets', assetRoutes);
   app.use('/v1/reports', reportRoutes);
 
   app.use(notFoundHandler);
