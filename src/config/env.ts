@@ -17,6 +17,11 @@ const envSchema = z.object({
 
 export const env = envSchema.parse(process.env);
 
-if (env.NODE_ENV === 'production' && env.JWT_SECRET.includes('change-me')) {
-  throw new Error('JWT_SECRET must be set to a strong secret in production.');
+const placeholderSecretMarkers = ['change-me', 'replace-this'];
+
+if (
+  env.NODE_ENV === 'production'
+  && placeholderSecretMarkers.some(marker => env.JWT_SECRET.toLowerCase().includes(marker))
+) {
+  throw new Error('JWT_SECRET must be set to a non-placeholder secret in production.');
 }
