@@ -12,6 +12,13 @@ const tenantRepository = new TenantRepository();
 const assetRepository = new AssetRepository();
 const SUMMARY_CACHE_TTL_SECONDS = 45;
 
+// X-Cache header signals whether the response was served from the in-process
+// cache (HIT) or freshly computed from the database (MISS). Clients can use
+// this header to detect stale data and decide whether to retry after a write.
+const X_CACHE_HEADER = 'x-cache';
+const X_CACHE_HIT = 'HIT';
+const X_CACHE_MISS = 'MISS';
+
 type AssetSummaryReport = {
   tenant: {
     id: string;
@@ -29,7 +36,7 @@ router.get('/assets/summary', asyncHandler(async (req, res) => {
   const cacheKey = `tenant:${ctx.tenantId}:reports:assets-summary:v1`;
   const cached = cache.get<AssetSummaryReport>(cacheKey);
   if (cached) {
-    res.setHeader('x-cache', 'HIT');
+    res.setHeader(X_CACHE_HEADER, X_CACHE_HIT);
     res.json(cached);
     return;
   }
@@ -49,7 +56,7 @@ router.get('/assets/summary', asyncHandler(async (req, res) => {
   };
 
   cache.set(cacheKey, report, SUMMARY_CACHE_TTL_SECONDS);
-  res.setHeader('x-cache', 'MISS');
+  res.setHeader(X_CACHE_HEADER, X_CACHE_MISS);
   res.json(report);
 }));
 
