@@ -3,7 +3,10 @@ import express from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { env } from './config/env.js';
+import { pgPool } from './db/postgres.js';
+import { pingMongo } from './db/mongo.js';
 import './shared/requestContext.js';
+import { asyncHandler } from './shared/asyncHandler.js';
 import { requestId } from './middleware/requestId.js';
 import { inputSanitization } from './middleware/inputSanitization.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -40,9 +43,20 @@ export function buildApp(): express.Express {
     }));
   }
 
-  app.get('/health', (_req, res) => {
-    res.json({ status: 'ok' });
-  });
+  app.get('/health', asyncHandler(async (_req, res) => {
+    const [pg, mongo] = await Promise.allSettled([
+      pgPool.query('SELECT 1'),
+      pingMongo()
+    ]);
+    const ok = pg.status === 'fulfilled' && mongo.status === 'fulfilled';
+    res.status(ok ? 200 : 503).json({
+      status: ok ? 'ok' : 'degraded',
+      checks: {
+        postgres: pg.status === 'fulfilled' ? 'ok' : 'error',
+        mongodb: mongo.status === 'fulfilled' ? 'ok' : 'error'
+      }
+    });
+  }));
 
   app.post('/security/csp-report', express.json({ type: 'application/csp-report' }), cspReportHandler);
 

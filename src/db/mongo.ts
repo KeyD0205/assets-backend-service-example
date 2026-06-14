@@ -60,3 +60,7 @@ export async function closeMongo(): Promise<void> {
   client = undefined;
   db = undefined;
 }
+
+export async function pingMongo(): Promise<void> {
+  await mongoDb().command({ ping: 1 });
+}
