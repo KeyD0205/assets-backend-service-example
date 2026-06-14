@@ -26,7 +26,7 @@ async function getToken(email: string, tenant_slug: string): Promise<string> {
   const response = await request(app)
     .post('/v1/auth/tokens')
     .send({ email, tenant_slug, password: testPassword })
-    .expect(201);
+    .expect(200);
   return (response.body as TokenResponse).access_token;
 }
 
