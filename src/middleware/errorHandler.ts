@@ -3,8 +3,6 @@ import { ZodError } from 'zod';
 import { AppError } from '../shared/errors.js';
 import { logger } from '../shared/logger.js';
 
-type ExpressError = Error & { status?: number; statusCode?: number };
-
 export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction): void {
   // Handle payload too large errors (413)
   if (err instanceof Error && err.message.includes('payload too large')) {
