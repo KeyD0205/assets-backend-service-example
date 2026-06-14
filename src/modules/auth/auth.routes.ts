@@ -40,10 +40,15 @@ router.post('/tokens', asyncHandler(async (req, res) => {
     }
   );
 
+  // Derive expires_in from the signed token's exp claim rather than the
+  // configured TTL so the value accounts for rounding inside jwt.sign.
+  const { exp } = jwt.decode(accessToken) as { exp: number };
+  const expiresIn = Math.max(0, Math.floor(exp - Date.now() / 1000));
+
   res.status(200).json({
     access_token: accessToken,
     token_type: 'Bearer',
-    expires_in: env.TOKEN_TTL_SECONDS,
+    expires_in: expiresIn,
     user: toPublicUser(user)
   });
 }));
