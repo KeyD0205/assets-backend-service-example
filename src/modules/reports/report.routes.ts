@@ -12,6 +12,11 @@ const tenantRepository = new TenantRepository();
 const assetRepository = new AssetRepository();
 const SUMMARY_CACHE_TTL_SECONDS = 45;
 
+// Deduplicates concurrent DB hits after TTL expiry: the first miss starts the
+// computation and stores the promise here; subsequent misses await the same
+// promise instead of launching N parallel aggregations.
+const inflight = new Map<string, Promise<AssetSummaryReport>>();
+
 // X-Cache header signals whether the response was served from the in-process
 // cache (HIT) or freshly computed from the database (MISS). Clients can use
 // this header to detect stale data and decide whether to retry after a write.
@@ -41,21 +46,29 @@ router.get('/assets/summary', asyncHandler(async (req, res) => {
     return;
   }
 
-  const tenant = await tenantRepository.findById(ctx.tenantId);
-  if (!tenant) throw notFound('Tenant');
+  let pending = inflight.get(cacheKey);
+  if (!pending) {
+    pending = (async () => {
+      try {
+        const tenant = await tenantRepository.findById(ctx.tenantId);
+        if (!tenant) throw notFound('Tenant');
 
-  const summary = await assetRepository.summaryByTenant(ctx.tenantId);
-  const report: AssetSummaryReport = {
-    tenant: {
-      id: tenant.id,
-      name: tenant.name,
-      slug: tenant.slug
-    },
-    assets: summary,
-    generated_at: new Date().toISOString()
-  };
+        const summary = await assetRepository.summaryByTenant(ctx.tenantId);
+        const report: AssetSummaryReport = {
+          tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug },
+          assets: summary,
+          generated_at: new Date().toISOString()
+        };
+        cache.set(cacheKey, report, SUMMARY_CACHE_TTL_SECONDS);
+        return report;
+      } finally {
+        inflight.delete(cacheKey);
+      }
+    })();
+    inflight.set(cacheKey, pending);
+  }
 
-  cache.set(cacheKey, report, SUMMARY_CACHE_TTL_SECONDS);
+  const report = await pending;
   res.setHeader(X_CACHE_HEADER, X_CACHE_MISS);
   res.json(report);
 }));
