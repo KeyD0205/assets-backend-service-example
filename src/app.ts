@@ -8,6 +8,7 @@ import { pingMongo } from './db/mongo.js';
 import './shared/requestContext.js';
 import { asyncHandler } from './shared/asyncHandler.js';
 import { requestId } from './middleware/requestId.js';
+import { requestLogger } from './middleware/requestLogger.js';
 import { inputSanitization } from './middleware/inputSanitization.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { notFoundHandler } from './middleware/notFound.js';
@@ -27,6 +28,7 @@ export function buildApp(): express.Express {
 
   app.disable('x-powered-by');
   app.use(requestId);
+  app.use(requestLogger);
   app.use(helmet(getHelmetOptions()));
   app.use(cors(getCorsOptions()));
   app.use(httpsEnforcement);
