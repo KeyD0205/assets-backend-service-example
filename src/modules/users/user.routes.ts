@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { authenticate } from '../../middleware/auth.js';
+import { authenticate, invalidateUserAuthCache } from '../../middleware/auth.js';
 import { requireMinimumRole } from '../../middleware/requireRole.js';
 import { asyncHandler } from '../../shared/asyncHandler.js';
 import { badRequest, forbidden, notFound } from '../../shared/errors.js';
@@ -55,6 +55,7 @@ router.patch('/:userId', requireMinimumRole('admin'), asyncHandler(async (req, r
 
   const body = parseBody(updateUserSchema, req);
   const user = await userRepository.updateInTenant(ctx.tenantId, userId, body);
+  invalidateUserAuthCache(ctx.tenantId, userId);
   res.json({ user: toPublicUser(user) });
 }));
 
@@ -64,6 +65,7 @@ router.delete('/:userId', requireMinimumRole('admin'), asyncHandler(async (req, 
   if (userId === ctx.userId) throw forbidden('Users cannot delete themselves');
 
   await userRepository.deleteInTenant(ctx.tenantId, userId);
+  invalidateUserAuthCache(ctx.tenantId, userId);
   res.status(204).send();
 }));
 

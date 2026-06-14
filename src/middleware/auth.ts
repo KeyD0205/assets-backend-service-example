@@ -2,9 +2,16 @@ import type { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { unauthorized } from '../shared/errors.js';
+import { TtlCache } from '../shared/cache.js';
 import { UserRepository } from '../modules/users/user.repository.js';
+import type { User } from '../modules/users/user.types.js';
 
 const userRepository = new UserRepository();
+const userCache = new TtlCache();
+
+export function invalidateUserAuthCache(tenantId: string, userId: string): void {
+  userCache.delete(`${tenantId}:${userId}`);
+}
 
 type TokenPayload = {
   sub: string;
@@ -14,7 +21,7 @@ type TokenPayload = {
 /**
  * Authenticates requests by validating JWT tokens
  * Sets req.ctx with user information after successful validation
- * 
+ *
  * After this middleware runs successfully:
  * - req.ctx is guaranteed to be non-null
  * - req.ctx.userId, tenantId, and role are populated
@@ -32,15 +39,20 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
       issuer: env.JWT_ISSUER,
       audience: env.JWT_AUDIENCE
     }) as Partial<TokenPayload>;
-    
+
     if (!payload.sub || !payload.tenant_id) {
       throw unauthorized('Invalid token payload');
     }
 
-    const user = await userRepository.findByIdInTenant(payload.tenant_id, payload.sub);
-    if (!user) throw unauthorized('User no longer exists');
+    const cacheKey = `${payload.tenant_id}:${payload.sub}`;
+    let user = userCache.get<User>(cacheKey);
 
-    // Set context with guaranteed non-null values
+    if (!user) {
+      user = await userRepository.findByIdInTenant(payload.tenant_id, payload.sub) ?? undefined;
+      if (!user) throw unauthorized('User no longer exists');
+      userCache.set(cacheKey, user, Math.floor(env.TOKEN_TTL_SECONDS / 2));
+    }
+
     req.ctx = {
       requestId: req.requestId,
       userId: user.id,
