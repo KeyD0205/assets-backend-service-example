@@ -39,8 +39,12 @@ describe('inputSanitization middleware', () => {
     expect(err).toBeDefined();
   });
 
-  it('rejects __proto__ in body', () => {
-    const req = makeReq({ '__proto__': { isAdmin: true } });
+  it('rejects __proto__ in body (as produced by JSON.parse)', () => {
+    // Object-literal { '__proto__': v } sets the prototype rather than creating
+    // an own property, so Object.entries never sees the key. The real attack
+    // vector is a JSON body: JSON.parse creates __proto__ as an own enumerable
+    // property, which is exactly what express.json() delivers to the middleware.
+    const req = makeReq(JSON.parse('{"__proto__": {"isAdmin": true}}'));
     const { err } = run(req);
     expect(err).toBeDefined();
   });
