@@ -11,6 +11,18 @@ type ListFilters = {
   cursor?: { installed_at: string; id: string };
 };
 
+export type AssetPayload = {
+  name: string;
+  type: string;
+  status: 'ok' | 'warning' | 'critical';
+  lat: number;
+  lng: number;
+  installed_at: string;
+  [key: string]: unknown;
+};
+
+export type AssetPatch = Partial<AssetPayload>;
+
 export function sanitizeAsset(doc: AssetDocument): Omit<AssetDocument, '_id'> {
   const { _id: _ignored, ...publicDoc } = doc;
   return publicDoc;
@@ -48,7 +60,7 @@ export class AssetRepository {
     return doc ? sanitizeAsset(doc) : null;
   }
 
-  async create(tenantId: string, payload: Record<string, unknown>): Promise<Omit<AssetDocument, '_id'>> {
+  async create(tenantId: string, payload: AssetPayload): Promise<Omit<AssetDocument, '_id'>> {
     const now = new Date().toISOString();
     const id = randomUUID();
     const doc = {
@@ -71,7 +83,7 @@ export class AssetRepository {
     }
   }
 
-  async update(tenantId: string, assetId: string, patch: Record<string, unknown>): Promise<Omit<AssetDocument, '_id'>> {
+  async update(tenantId: string, assetId: string, patch: AssetPatch): Promise<Omit<AssetDocument, '_id'>> {
     const update: UpdateFilter<AssetDocument> = {
       $set: {
         ...patch,
