@@ -53,7 +53,13 @@ export function buildApp(): express.Express {
       checks: {
         postgres: pg.status === 'fulfilled' ? 'ok' : 'error',
         mongodb: mongo.status === 'fulfilled' ? 'ok' : 'error'
-      }
+      },
+      pool: {
+        total: pgPool.totalCount,
+        idle: pgPool.idleCount,
+        waiting: pgPool.waitingCount
+      },
+      uptime_seconds: Math.floor(process.uptime())
     });
   }));
 
