@@ -15,6 +15,97 @@ Tenant isolation is enforced by the auth middleware and repository contracts:
 - All Mongo asset queries include `tenant_id`.
 - Cross-tenant asset lookups return `404`, not `403`, to avoid leaking resource existence.
 
+## Architecture
+
+```mermaid
+flowchart TD
+    Client(["HTTP Client"])
+
+    subgraph "Request pipeline (every request)"
+        MW["requestId → helmet → cors\nhttpsEnforcement → bodyLimiter → inputSanitization"]
+    end
+
+    subgraph "Public — before global rate limit"
+        HEALTH["GET /health"]
+        CSP["POST /security/csp-report · 30 rpm"]
+    end
+
+    RL["Global rate limit · 300 rpm per IP"]
+
+    subgraph "Unauthenticated"
+        AT["POST /v1/auth/tokens"]
+        TC["POST /v1/tenants · 10 rpm"]
+    end
+
+    subgraph "Authenticated (JWT Bearer + RBAC)"
+        AUTH["authenticate middleware\n(verifies JWT, loads user from PG)"]
+        ROLE["requireRole · admin / editor / viewer"]
+
+        subgraph "Resource modules"
+            USERS["GET|POST /v1/users\nGET|PATCH|DELETE /v1/users/:id"]
+            ASSETS["GET|POST /v1/assets\nGET|PATCH|DELETE /v1/assets/:id"]
+            TM["GET /v1/tenants/me"]
+            REPORT["GET /v1/reports/assets/summary\nTtlCache · 45 s"]
+        end
+    end
+
+    subgraph "Data stores"
+        PG[("PostgreSQL\ntenants · users")]
+        MDB[("MongoDB\nassets")]
+        CACHE["TtlCache\n(in-process)"]
+    end
+
+    Client --> MW
+    MW --> HEALTH & CSP & RL
+    RL --> AT & TC & AUTH
+    AUTH --> ROLE --> USERS & ASSETS & TM & REPORT
+
+    AT --> PG
+    TC --> PG
+    USERS --> PG
+    TM --> PG
+    ASSETS --> MDB
+    REPORT -->|"cache miss"| MDB & PG
+    REPORT -->|"cache hit"| CACHE
+```
+
+### Multi-tenant data model
+
+```mermaid
+erDiagram
+    TENANT {
+        uuid      id          PK
+        text      name
+        text      slug        "unique"
+        timestamp created_at
+    }
+    USER {
+        uuid      id          PK
+        uuid      tenant_id   FK
+        text      name
+        text      email       "unique per tenant"
+        text      password_hash
+        text      role        "admin | editor | viewer"
+        timestamp created_at
+    }
+    ASSET {
+        string    _id         PK  "tenant_id:id"
+        uuid      tenant_id
+        uuid      id
+        text      name
+        text      type
+        text      status      "ok | warning | critical"
+        float     lat
+        float     lng
+        date      installed_at
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    TENANT ||--o{ USER  : "has"
+    TENANT ||--o{ ASSET : "owns"
+```
+
 ## Requirements covered
 
 - Tenant onboarding with initial admin user.
@@ -66,6 +157,23 @@ TOKEN="paste-token-here"
 curl http://localhost:3000/v1/assets?status=warning\&limit=10 \
   -H "authorization: Bearer $TOKEN"
 ```
+
+## Environment variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `NODE_ENV` | No | `development` | `development` \| `test` \| `production` |
+| `PORT` | No | `3000` | HTTP listen port |
+| `DATABASE_URL` | No | `postgres://postgres:postgres@localhost:5432/assetsvc` | PostgreSQL connection string |
+| `MONGO_URL` | No | `mongodb://localhost:27017` | MongoDB connection string |
+| `MONGO_DB_NAME` | No | `assetsvc` | MongoDB database name |
+| `JWT_SECRET` | **Yes** | *(dev placeholder)* | Minimum 32-character signing secret — must not contain `change-me` in production |
+| `JWT_ISSUER` | No | `multi-tenant-asset-service` | JWT `iss` claim |
+| `JWT_AUDIENCE` | No | `asset-service-api` | JWT `aud` claim |
+| `TOKEN_TTL_SECONDS` | No | `3600` | JWT lifetime in seconds (60–86400) |
+| `CORS_ORIGIN` | No | `*` | Allowed CORS origin. Wildcard is rejected in production. |
+| `ENABLE_RATE_LIMIT` | No | `true` | Global rate limiter toggle. Per-route limiters (auth, tenants, CSP) are always active. |
+| `DB_POOL_MAX` | No | `10` | Maximum PostgreSQL pool connections |
 
 ## API overview
 
