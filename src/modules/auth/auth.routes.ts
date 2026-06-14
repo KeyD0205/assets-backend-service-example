@@ -55,8 +55,11 @@ router.post('/tokens', authLimiter, asyncHandler(async (req, res) => {
 
   // Derive expires_in from the signed token's exp claim rather than the
   // configured TTL so the value accounts for rounding inside jwt.sign.
-  const { exp } = jwt.decode(accessToken) as { exp: number };
-  const expiresIn = Math.max(0, Math.floor(exp - Date.now() / 1000));
+  const decoded = jwt.decode(accessToken);
+  const exp = typeof decoded === 'object' && decoded !== null ? decoded.exp : undefined;
+  const expiresIn = exp !== undefined
+    ? Math.max(0, Math.floor(exp - Date.now() / 1000))
+    : env.TOKEN_TTL_SECONDS;
 
   res.status(200).json({
     access_token: accessToken,
