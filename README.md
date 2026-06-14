@@ -118,7 +118,7 @@ erDiagram
 - Mongo indexes mapped to exposed queries.
 - Postgres uniqueness and tenant indexes.
 - Seed script for Postgres and Mongo.
-- Focused integration tests around tenant isolation and authorization.
+- Focused unit and integration tests around tenant isolation, authorization, validation, pagination, caching, and sanitization.
 - Optional in-process TTL cache for the report endpoint, invalidated on asset writes.
 
 ## Running locally
@@ -134,6 +134,12 @@ npm run dev
 If `5432` or `27017` is already in use, change `POSTGRES_PORT` or `MONGO_PORT` in `.env` before running `npm run db:up`, and update `DATABASE_URL` or `MONGO_URL` to match.
 
 To stop the databases without deleting data, run `npm run db:down`. To remove database volumes and start from a clean slate, run `npm run db:reset`.
+
+To run the same local checks as CI after the databases are up, use:
+
+```bash
+npm run verify
+```
 
 Health check:
 
@@ -340,8 +346,7 @@ Run the databases and seed before tests:
 
 ```bash
 npm run db:up
-npm run seed
-npm test
+npm run verify
 ```
 
 The tests focus on the highest-risk behavior:
@@ -350,7 +355,10 @@ The tests focus on the highest-risk behavior:
 - cross-tenant asset IDs return `404`;
 - client-supplied `tenant_id` is rejected;
 - viewers cannot mutate assets;
-- report aggregation is scoped to the caller tenant.
+- report aggregation is scoped to the caller tenant;
+- auth and API edge cases return the expected errors;
+- asset validation rejects unsafe payloads;
+- pagination, cache, password, and input-sanitization helpers behave predictably.
 
 ## Notes and trade-offs
 

@@ -47,7 +47,7 @@ Tenant isolation is treated as the primary correctness concern. Every authentica
 - Asset routes under `src/modules/assets`.
 - Report route under `src/modules/reports`.
 - Shared middleware and infrastructure under `src/middleware`, `src/db`, `src/config`, and `src/shared`.
-- Integration tests under `test/tenant-isolation.test.ts`.
+- Unit and integration tests under `test`.
 
 ### API section
 
@@ -75,8 +75,8 @@ Tenant isolation is treated as the primary correctness concern. Every authentica
 | Seeded assets per tenant | 100 |
 | Total seeded assets | 300 |
 | Asset stores used | PostgreSQL metadata + MongoDB documents |
-| Test suites | 1 integration suite |
-| Integration tests | 16 |
+| Test files | 7 |
+| Tests | 79 |
 | CI verification steps | install, seed, build, test, audit |
 
 ## Store boundary and rationale
@@ -209,7 +209,7 @@ All Mongo access patterns begin with `tenant_id`, which supports both performanc
 
 ## Testing and CI
 
-The integration tests focus on the highest-risk assignment requirements:
+The tests focus on the highest-risk assignment requirements:
 
 - tenant-scoped asset listing.
 - cross-tenant asset lookup behavior.
@@ -237,6 +237,12 @@ npm test
 npm audit
 ```
 
+Locally, the same sequence is available as:
+
+```text
+npm run verify
+```
+
 This gives reviewers a quick confidence path: the app is not only typechecked, it is seeded and tested against the same database types used by the service.
 
 ## Reviewer quick path
@@ -247,9 +253,7 @@ The fastest local review path is:
 cp .env.example .env
 npm ci
 npm run db:up
-npm run seed
-npm run build
-npm test
+npm run verify
 npm run dev
 ```
 

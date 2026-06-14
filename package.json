@@ -14,6 +14,7 @@
     "seed": "tsx src/scripts/seed.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "verify": "npm run seed && npm run build && npm test && npm audit",
     "db:up": "docker compose up -d --wait postgres mongo",
     "db:down": "docker compose down",
     "db:reset": "docker compose down -v"
