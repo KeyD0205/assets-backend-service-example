@@ -23,11 +23,6 @@ export function invalidateUserAuthCache(tenantId: string, userId: string): void 
   userCache.delete(`${tenantId}:${userId}`);
 }
 
-type TokenPayload = {
-  sub: string;
-  tenant_id: string;
-};
-
 /**
  * Authenticates requests by validating JWT tokens
  * Sets req.ctx with user information after successful validation
@@ -44,21 +39,25 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
     const token = header.slice('Bearer '.length).trim();
     if (!token) throw unauthorized();
 
-    const payload = jwt.verify(token, env.JWT_SECRET, {
+    const raw = jwt.verify(token, env.JWT_SECRET, {
       algorithms: ['HS256'],
       issuer: env.JWT_ISSUER,
       audience: env.JWT_AUDIENCE
-    }) as Partial<TokenPayload>;
+    });
 
-    if (!payload.sub || !payload.tenant_id) {
+    if (typeof raw === 'string') throw unauthorized('Invalid token payload');
+
+    const sub = raw.sub;
+    const tenantId = raw['tenant_id'];
+    if (typeof sub !== 'string' || typeof tenantId !== 'string') {
       throw unauthorized('Invalid token payload');
     }
 
-    const cacheKey = `${payload.tenant_id}:${payload.sub}`;
+    const cacheKey = `${tenantId}:${sub}`;
     let user = userCache.get<User>(cacheKey);
 
     if (!user) {
-      user = await userRepository.findByIdInTenant(payload.tenant_id, payload.sub) ?? undefined;
+      user = await userRepository.findByIdInTenant(tenantId, sub) ?? undefined;
       if (!user) throw unauthorized('User no longer exists');
       userCache.set(cacheKey, user, Math.floor(env.TOKEN_TTL_SECONDS / 2));
     }
