@@ -36,7 +36,7 @@ Tenant isolation is treated as the primary correctness concern. Every authentica
 - Central error contract with request ids.
 - Security middleware for request ids, Helmet, CORS, HTTPS enforcement in production, rate limiting, input sanitization, and body-size limits.
 - Seed script for both stores.
-- GitHub Actions CI that runs install, seed, TypeScript build, integration tests, and `npm audit`.
+- GitHub Actions CI that runs install, seed, TypeScript build, unit/integration tests, and `npm audit`.
 
 ### Backend section
 
@@ -116,7 +116,7 @@ Tenant isolation is enforced at the request-context and repository boundaries:
 
 - Authenticated routes require a bearer token.
 - Token payloads are verified with issuer, audience, and algorithm constraints.
-- The user is reloaded from PostgreSQL by `tenant_id` and `user_id` on each authenticated request.
+- The user is loaded from PostgreSQL by `tenant_id` and `user_id`, with a short in-process auth cache for repeat requests.
 - `req.ctx` is populated only after the tenant membership check succeeds.
 - User repository methods scope reads and writes by tenant.
 - Asset repository methods scope reads and writes by tenant.
@@ -160,7 +160,7 @@ Admin-only user mutations are protected with role middleware. The service also b
 
 ### Runtime hardening
 
-The app disables `x-powered-by`, applies Helmet, supports configurable CORS, enforces HTTPS in production, supports rate limiting, adds request ids, sanitizes input, and applies request body limits. Production startup rejects placeholder JWT secrets.
+The app disables `x-powered-by`, applies request logging, Helmet, configurable CORS, HTTPS enforcement in production, rate limiting, request ids, input sanitization, request body limits, and dependency-aware health checks. Non-development startup rejects placeholder JWT secrets, and production rejects wildcard CORS.
 
 ## Cross-store report
 
@@ -237,7 +237,7 @@ npm test
 npm audit
 ```
 
-Locally, the same sequence is available as:
+Locally, the post-install verification sequence is available as:
 
 ```text
 npm run verify
@@ -311,7 +311,7 @@ The next production steps would be:
 ## Tradeoffs
 
 - Authentication is intentionally simple because OAuth, SSO, and external identity providers are out of scope.
-- JWTs carry tenant and user ids, but current user membership is still reloaded from PostgreSQL so role and deletion changes take effect without waiting for token expiry.
+- JWTs carry tenant and user ids. User membership is loaded from PostgreSQL and cached briefly; local role/delete mutations invalidate the cache in-process, while multi-instance deployments would need shared cache invalidation.
 - MongoDB allows tenant-specific asset fields, but the API still validates the common core shape and blocks ownership fields.
 - The report cache is in-process. It is sufficient for a local assignment service, but a multi-instance deployment would need shared cache invalidation.
 - The seed script is intentionally destructive and refuses to run in production, which is useful for local review but should become migrations plus non-destructive seed fixtures in a larger system.
