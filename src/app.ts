@@ -14,7 +14,7 @@ import { notFoundHandler } from './middleware/notFound.js';
 import { getCorsOptions } from './middleware/corsConfig.js';
 import { getHelmetOptions } from './middleware/helmetConfig.js';
 import { cspReportHandler } from './middleware/cspReportHandler.js';
-import { createBodyLimiter, BODY_SIZE_LIMITS, dynamicBodyLimiter } from './middleware/bodySizeLimit.js';
+import { dynamicBodyLimiter } from './middleware/bodySizeLimit.js';
 import { httpsEnforcement } from './middleware/httpsEnforcement.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { tenantRoutes } from './modules/tenants/tenant.routes.js';
