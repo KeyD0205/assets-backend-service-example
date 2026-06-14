@@ -169,8 +169,7 @@ export class UserRepository {
         throw badRequest('Cannot remove the last admin in a tenant');
       }
 
-      const result = await client.query('DELETE FROM users WHERE tenant_id = $1 AND id = $2', [tenantId, userId]);
-      if (result.rowCount === 0) throw notFound('User');
+      await client.query('DELETE FROM users WHERE tenant_id = $1 AND id = $2', [tenantId, userId]);
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK');
