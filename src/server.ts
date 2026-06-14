@@ -1,6 +1,6 @@
 import { env } from './config/env.js';
-import { initMongo } from './db/mongo.js';
-import { pgPool } from './db/postgres.js';
+import { initMongo, closeMongo } from './db/mongo.js';
+import { pgPool, closePostgres } from './db/postgres.js';
 import { buildApp } from './app.js';
 import { logger } from './shared/logger.js';
 
@@ -13,19 +13,17 @@ async function main(): Promise<void> {
     logger.info({ port: env.PORT }, 'Asset service listening');
   });
 
-  const shutdown = () => {
+  const shutdown = async (): Promise<void> => {
     logger.info('Shutting down');
-    server.close(err => {
-      if (err) {
-        logger.error({ err }, 'Failed to stop HTTP server cleanly');
-        process.exit(1);
-      }
-      process.exit(0);
+    await new Promise<void>((resolve, reject) => {
+      server.close(err => (err ? reject(err) : resolve()));
     });
+    await Promise.allSettled([closePostgres(), closeMongo()]);
+    process.exit(0);
   };
 
-  process.on('SIGTERM', shutdown);
-  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', () => { void shutdown(); });
+  process.on('SIGINT', () => { void shutdown(); });
 }
 
 void main().catch(err => {
