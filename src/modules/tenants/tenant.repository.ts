@@ -3,9 +3,9 @@ import type pg from 'pg';
 import { pgPool } from '../../db/postgres.js';
 import { conflict, notFound } from '../../shared/errors.js';
 import { hashPassword } from '../../shared/passwords.js';
-import type { Role } from '../../shared/roles.js';
 import type { Tenant } from './tenant.types.js';
 import type { User } from '../users/user.types.js';
+import { mapUser } from '../users/user.repository.js';
 
 function mapTenant(row: Record<string, unknown>): Tenant {
   return {
@@ -72,17 +72,6 @@ export class TenantRepository {
       client.release();
     }
   }
-}
-
-export function mapUser(row: Record<string, unknown>): User {
-  return {
-    id: String(row.id),
-    tenant_id: String(row.tenant_id),
-    name: String(row.name),
-    email: String(row.email),
-    role: String(row.role) as Role,
-    created_at: new Date(String(row.created_at)).toISOString()
-  };
 }
 
 export async function ensureTenantExists(tenantId: string, client?: pg.PoolClient): Promise<Tenant> {

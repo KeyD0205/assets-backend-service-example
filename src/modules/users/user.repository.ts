@@ -4,11 +4,21 @@ import { pgPool } from '../../db/postgres.js';
 import { badRequest, conflict, notFound } from '../../shared/errors.js';
 import { hashPassword } from '../../shared/passwords.js';
 import type { Role } from '../../shared/roles.js';
-import { mapUser } from '../tenants/tenant.repository.js';
 import type { User } from './user.types.js';
 
 type PgError = { code?: string; constraint?: string };
 export type AuthUser = User & { password_hash: string };
+
+export function mapUser(row: Record<string, unknown>): User {
+  return {
+    id: String(row.id),
+    tenant_id: String(row.tenant_id),
+    name: String(row.name),
+    email: String(row.email),
+    role: String(row.role) as Role,
+    created_at: new Date(String(row.created_at)).toISOString()
+  };
+}
 
 function isUniqueViolation(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as PgError).code === '23505';
