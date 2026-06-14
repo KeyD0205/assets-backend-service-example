@@ -22,12 +22,12 @@ flowchart TD
     Client(["HTTP Client"])
 
     subgraph "Request pipeline (every request)"
-        MW["requestId → helmet → cors\nhttpsEnforcement → bodyLimiter → inputSanitization"]
+        MW["requestId -> requestLogger -> helmet -> cors\nhttpsEnforcement -> bodyLimiter -> inputSanitization"]
     end
 
-    subgraph "Public — before global rate limit"
+    subgraph "Public - before global rate limit"
         HEALTH["GET /health"]
-        CSP["POST /security/csp-report · 30 rpm"]
+        CSP["POST /security/csp-report - 30 rpm"]
     end
 
     RL["Global rate limit · 300 rpm per IP"]
@@ -38,14 +38,14 @@ flowchart TD
     end
 
     subgraph "Authenticated (JWT Bearer + RBAC)"
-        AUTH["authenticate middleware\n(verifies JWT, loads user from PG)"]
-        ROLE["requireRole · admin / editor / viewer"]
+        AUTH["authenticate middleware\n(verifies JWT, resolves cached user context)"]
+        ROLE["requireRole - admin / editor / viewer"]
 
         subgraph "Resource modules"
             USERS["GET|POST /v1/users\nGET|PATCH|DELETE /v1/users/:id"]
             ASSETS["GET|POST /v1/assets\nGET|PATCH|DELETE /v1/assets/:id"]
             TM["GET /v1/tenants/me"]
-            REPORT["GET /v1/reports/assets/summary\nTtlCache · 45 s"]
+            REPORT["GET /v1/reports/assets/summary\nTtlCache - 45 s"]
         end
     end
 
@@ -135,7 +135,7 @@ If `5432` or `27017` is already in use, change `POSTGRES_PORT` or `MONGO_PORT` i
 
 To stop the databases without deleting data, run `npm run db:down`. To remove database volumes and start from a clean slate, run `npm run db:reset`.
 
-To run the same local checks as CI after the databases are up, use:
+To run the same post-install checks as CI after the databases are up, use:
 
 ```bash
 npm run verify
@@ -145,6 +145,24 @@ Health check:
 
 ```bash
 curl http://localhost:3000/health
+```
+
+The health response verifies both backing stores and includes connection-pool and uptime details:
+
+```json
+{
+  "status": "ok",
+  "checks": {
+    "postgres": "ok",
+    "mongodb": "ok"
+  },
+  "pool": {
+    "total": 1,
+    "idle": 1,
+    "waiting": 0
+  },
+  "uptime_seconds": 12
+}
 ```
 
 Get a token:
@@ -173,7 +191,7 @@ curl http://localhost:3000/v1/assets?status=warning\&limit=10 \
 | `DATABASE_URL` | No | `postgres://postgres:postgres@localhost:5432/assetsvc` | PostgreSQL connection string |
 | `MONGO_URL` | No | `mongodb://localhost:27017` | MongoDB connection string |
 | `MONGO_DB_NAME` | No | `assetsvc` | MongoDB database name |
-| `JWT_SECRET` | **Yes** | *(dev placeholder)* | Minimum 32-character signing secret — must not contain `change-me` in production |
+| `JWT_SECRET` | Outside development | *(dev placeholder)* | Minimum 32-character signing secret. Placeholder values containing `change-me` or `replace-this` are rejected outside development. |
 | `JWT_ISSUER` | No | `multi-tenant-asset-service` | JWT `iss` claim |
 | `JWT_AUDIENCE` | No | `asset-service-api` | JWT `aud` claim |
 | `TOKEN_TTL_SECONDS` | No | `3600` | JWT lifetime in seconds (60–86400) |
@@ -311,6 +329,8 @@ Response:
 }
 ```
 
+The response includes `x-cache: HIT` or `x-cache: MISS` to show whether the tenant-scoped in-process cache served the report.
+
 ## Error contract
 
 ```json
@@ -362,7 +382,7 @@ The tests focus on the highest-risk behavior:
 
 ## Notes and trade-offs
 
-- Authentication is intentionally simple because OAuth/SSO is out of scope. Users authenticate with email, tenant, and password. Tokens are signed JWTs, but role and tenant membership are loaded from Postgres on every request so user changes take effect immediately.
+- Authentication is intentionally simple because OAuth/SSO is out of scope. Users authenticate with email, tenant, and password. Tokens are signed JWTs. User membership is loaded from Postgres and cached briefly; role/delete mutations invalidate the local cache, while multi-instance deployments would need shared cache invalidation.
 - Asset documents are flexible, but ownership and identity fields are immutable from API input.
 - Reports are eventually consistent with respect to cache TTL. Asset writes invalidate the current tenant's report cache.
 - The seed script is intentionally destructive and refuses to run in production.
