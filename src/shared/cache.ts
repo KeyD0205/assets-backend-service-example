@@ -5,6 +5,7 @@ type CacheEntry<T> = {
 
 export class TtlCache {
   private readonly entries = new Map<string, CacheEntry<unknown>>();
+  private evictionTimer: NodeJS.Timeout | undefined;
 
   get<T>(key: string): T | undefined {
     const entry = this.entries.get(key);
@@ -33,9 +34,29 @@ export class TtlCache {
     }
   }
 
+  purgeExpired(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.entries) {
+      if (now >= entry.expiresAt) this.entries.delete(key);
+    }
+  }
+
+  startEviction(intervalMs = 60_000): void {
+    this.stopEviction();
+    this.evictionTimer = setInterval(() => this.purgeExpired(), intervalMs).unref();
+  }
+
+  stopEviction(): void {
+    if (this.evictionTimer !== undefined) {
+      clearInterval(this.evictionTimer);
+      this.evictionTimer = undefined;
+    }
+  }
+
   clear(): void {
     this.entries.clear();
   }
 }
 
 export const cache = new TtlCache();
+cache.startEviction();
