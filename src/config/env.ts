@@ -10,18 +10,24 @@ const envSchema = z.object({
   MONGO_URL: z.string().url().default('mongodb://localhost:27017'),
   MONGO_DB_NAME: z.string().min(1).default('assetsvc'),
   JWT_SECRET: z.string().min(32).default('local-development-secret-change-me-32chars'),
+  JWT_ISSUER: z.string().min(1).default('multi-tenant-asset-service'),
+  JWT_AUDIENCE: z.string().min(1).default('asset-service-api'),
   TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(3600),
   CORS_ORIGIN: z.string().default('*'),
-  ENABLE_RATE_LIMIT: z.coerce.boolean().default(false)
+  ENABLE_RATE_LIMIT: z.coerce.boolean().default(true),
+  DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10)
 });
 
 export const env = envSchema.parse(process.env);
 
-const placeholderSecretMarkers = ['change-me', 'replace-this'];
+const placeholderMarkers = ['change-me', 'replace-this'];
 
-if (
-  env.NODE_ENV === 'production'
-  && placeholderSecretMarkers.some(marker => env.JWT_SECRET.toLowerCase().includes(marker))
-) {
-  throw new Error('JWT_SECRET must be set to a non-placeholder secret in production.');
+if (placeholderMarkers.some(m => env.JWT_SECRET.toLowerCase().includes(m))) {
+  if (env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET must be a non-placeholder secret in production.');
+  }
+}
+
+if (env.NODE_ENV === 'production' && env.CORS_ORIGIN === '*') {
+  throw new Error('CORS_ORIGIN must not be wildcard (*) in production.');
 }
