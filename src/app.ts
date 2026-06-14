@@ -30,18 +30,8 @@ export function buildApp(): express.Express {
   app.use(helmet(getHelmetOptions()));
   app.use(cors(getCorsOptions()));
   app.use(httpsEnforcement);
-  // Apply dynamic body size limits based on request path
   app.use(dynamicBodyLimiter);
   app.use(inputSanitization);
-
-  if (env.ENABLE_RATE_LIMIT) {
-    app.use(rateLimit({
-      windowMs: 60_000,
-      limit: 300,
-      standardHeaders: true,
-      legacyHeaders: false
-    }));
-  }
 
   const cspReportLimiter = rateLimit({
     windowMs: 60_000,
@@ -50,6 +40,8 @@ export function buildApp(): express.Express {
     legacyHeaders: false
   });
 
+  // Health and CSP report are registered before the global rate limiter so
+  // they remain reachable when the per-IP limit is exhausted.
   app.get('/health', asyncHandler(async (_req, res) => {
     const [pg, mongo] = await Promise.allSettled([
       pgPool.query('SELECT 1'),
@@ -67,11 +59,17 @@ export function buildApp(): express.Express {
 
   app.post('/security/csp-report', cspReportLimiter, express.json({ type: 'application/csp-report' }), cspReportHandler);
 
-  // Routes with size limits configured in dynamicBodyLimiter
+  if (env.ENABLE_RATE_LIMIT) {
+    app.use(rateLimit({
+      windowMs: 60_000,
+      limit: 300,
+      standardHeaders: true,
+      legacyHeaders: false
+    }));
+  }
+
   app.use('/v1/auth', authRoutes);
   app.use('/v1/assets', assetRoutes);
-  
-  // Standard routes
   app.use('/v1/tenants', tenantRoutes);
   app.use('/v1/users', userRoutes);
   app.use('/v1/reports', reportRoutes);
