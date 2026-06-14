@@ -37,7 +37,7 @@ jobs:
       DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/assetsvc
       MONGO_URL: mongodb://127.0.0.1:27017
       MONGO_DB_NAME: assetsvc
-      JWT_SECRET: ci-secret-with-at-least-thirty-two-characters
+      JWT_SECRET: ${{ secrets.CI_JWT_SECRET }}
       TOKEN_TTL_SECONDS: 3600
       CORS_ORIGIN: "*"
       ENABLE_RATE_LIMIT: "false"
