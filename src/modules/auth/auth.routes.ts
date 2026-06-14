@@ -40,7 +40,7 @@ router.post('/tokens', asyncHandler(async (req, res) => {
     }
   );
 
-  res.status(201).json({
+  res.status(200).json({
     access_token: accessToken,
     token_type: 'Bearer',
     expires_in: env.TOKEN_TTL_SECONDS,
