@@ -35,6 +35,7 @@ router.post('/', requireMinimumRole('admin'), asyncHandler(async (req, res) => {
   const ctx = getRequestContext(req);
   const body = parseBody(createUserSchema, req);
   const user = await userRepository.createInTenant(ctx.tenantId, body);
+  res.setHeader('Location', `/v1/users/${user.id}`);
   res.status(201).json({ user: toPublicUser(user) });
 }));
 
