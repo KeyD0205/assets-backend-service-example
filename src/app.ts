@@ -43,6 +43,13 @@ export function buildApp(): express.Express {
     }));
   }
 
+  const cspReportLimiter = rateLimit({
+    windowMs: 60_000,
+    limit: 30,
+    standardHeaders: true,
+    legacyHeaders: false
+  });
+
   app.get('/health', asyncHandler(async (_req, res) => {
     const [pg, mongo] = await Promise.allSettled([
       pgPool.query('SELECT 1'),
@@ -58,7 +65,7 @@ export function buildApp(): express.Express {
     });
   }));
 
-  app.post('/security/csp-report', express.json({ type: 'application/csp-report' }), cspReportHandler);
+  app.post('/security/csp-report', cspReportLimiter, express.json({ type: 'application/csp-report' }), cspReportHandler);
 
   // Routes with size limits configured in dynamicBodyLimiter
   app.use('/v1/auth', authRoutes);
