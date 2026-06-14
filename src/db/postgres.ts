@@ -4,10 +4,11 @@ import { logger } from '../shared/logger.js';
 
 export const pgPool = new pg.Pool({
   connectionString: env.DATABASE_URL,
-  max: 10,
+  max: env.DB_POOL_MAX,
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 5_000,
-  statement_timeout: 15_000
+  statement_timeout: 15_000,
+  lock_timeout: 5_000
 });
 
 pgPool.on('error', err => {
