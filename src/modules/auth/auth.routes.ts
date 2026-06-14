@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import jwt from 'jsonwebtoken';
 import { env } from '../../config/env.js';
 import { asyncHandler } from '../../shared/asyncHandler.js';
@@ -13,7 +14,19 @@ import { createTokenSchema } from './auth.validation.js';
 const router = Router();
 const userRepository = new UserRepository();
 
-router.post('/tokens', asyncHandler(async (req, res) => {
+// Applied unconditionally — credential endpoints need brute-force protection
+// regardless of the global ENABLE_RATE_LIMIT flag. skipSuccessfulRequests
+// means only failed attempts consume the budget, so legitimate usage is not
+// throttled.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 10,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+router.post('/tokens', authLimiter, asyncHandler(async (req, res) => {
   const body = parseBody(createTokenSchema, req);
   const matches = await userRepository.findForAuth(body.email, body.tenant_slug, body.tenant_id);
 
