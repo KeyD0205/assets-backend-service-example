@@ -57,6 +57,7 @@ router.post('/', requireMinimumRole('editor'), asyncHandler(async (req, res) => 
   const body = parseBody(createAssetSchema, req);
   const asset = await assetRepository.create(ctx.tenantId, body);
   invalidateTenantAssetCaches(ctx.tenantId);
+  res.setHeader('Location', `/v1/assets/${asset.id}`);
   res.status(201).json({ asset });
 }));
 
