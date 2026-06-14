@@ -23,8 +23,8 @@ export const env = envSchema.parse(process.env);
 const placeholderMarkers = ['change-me', 'replace-this'];
 
 if (placeholderMarkers.some(m => env.JWT_SECRET.toLowerCase().includes(m))) {
-  if (env.NODE_ENV === 'production') {
-    throw new Error('JWT_SECRET must be a non-placeholder secret in production.');
+  if (env.NODE_ENV !== 'development') {
+    throw new Error('JWT_SECRET must not be a placeholder value outside of development.');
   }
 }
 
