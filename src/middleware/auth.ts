@@ -7,8 +7,18 @@ import { UserRepository } from '../modules/users/user.repository.js';
 import type { User } from '../modules/users/user.types.js';
 
 const userRepository = new UserRepository();
+
+// In-process cache: reduces per-request DB reads at the cost of a short
+// staleness window (TOKEN_TTL_SECONDS / 2). In a single-process deployment
+// invalidateUserAuthCache keeps the cache consistent on role/delete mutations.
+// In a multi-instance deployment each instance holds its own cache island —
+// a demoted or deleted user may retain the previous role on other instances
+// until their cache entry expires. Switch to a shared Redis cache to close
+// this gap in multi-instance deployments.
 const userCache = new TtlCache();
 
+// Call this after any user mutation (role change, delete) to evict the cached
+// user from the local auth cache.
 export function invalidateUserAuthCache(tenantId: string, userId: string): void {
   userCache.delete(`${tenantId}:${userId}`);
 }
