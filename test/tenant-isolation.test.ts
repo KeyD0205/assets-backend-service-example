@@ -1,8 +1,9 @@
 import request from 'supertest';
-import { beforeAll, afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { initMongo, closeMongo } from '../src/db/mongo.js';
 import { pgPool } from '../src/db/postgres.js';
+import { cache } from '../src/shared/cache.js';
 
 type TokenResponse = {
   access_token: string;
@@ -60,6 +61,10 @@ afterAll(async () => {
 });
 
 describe('tenant isolation and authorization', () => {
+  // Clear the in-process cache before each test so HIT/MISS assertions
+  // are not affected by cache entries populated by earlier tests.
+  beforeEach(() => cache.clear());
+
   it('rejects token issuance with an invalid password', async () => {
     await request(app)
       .post('/v1/auth/tokens')
@@ -109,12 +114,23 @@ describe('tenant isolation and authorization', () => {
 
   it('returns 404 instead of leaking cross-tenant asset existence', async () => {
     const northwindToken = await getToken('amelia@northwind.test', 'northwind-utilities');
-    const beaconAssetId = 'aab612c9-415d-474a-b5a6-69814104a8b5';
+    const beaconToken = await getToken('cora@beacon.test', 'beacon-sensors');
 
-    await request(app)
+    // Fetch a real beacon asset ID from the seed data rather than hardcoding it
+    const beaconAssets = await request(app)
+      .get('/v1/assets?limit=1')
+      .set('Authorization', `Bearer ${beaconToken}`)
+      .expect(200);
+    const beaconAssetId = (beaconAssets.body.data as Array<{ id: string }>)[0]?.id;
+    expect(beaconAssetId).toBeTruthy();
+
+    const res = await request(app)
       .get(`/v1/assets/${beaconAssetId}`)
       .set('Authorization', `Bearer ${northwindToken}`)
       .expect(404);
+
+    // Every response carries a unique request id
+    expect(res.headers['x-request-id']).toMatch(/\S+/);
   });
 
   it('rejects client-supplied tenant_id on asset create', async () => {
@@ -243,6 +259,7 @@ describe('tenant isolation and authorization', () => {
       .expect(201);
 
     const assetId = created.body.asset.id as string;
+    expect(created.headers.location).toBe(`/v1/assets/${assetId}`);
     expect(created.body.asset.tenant_id).toBe(tenant.tenant.id);
     expect(created.body.asset.manufacturer).toBe('QA Works');
 
@@ -376,10 +393,10 @@ describe('tenant isolation and authorization', () => {
         role: 'editor'
       })
       .expect(201);
+    const userId = created.body.user.id as string;
+    expect(created.headers.location).toBe(`/v1/users/${userId}`);
     expect(created.body.user.email).toBe(userEmail);
     expect(created.body.user.role).toBe('editor');
-
-    const userId = created.body.user.id as string;
     const updated = await request(app)
       .patch(`/v1/users/${userId}`)
       .set('Authorization', `Bearer ${adminToken}`)
