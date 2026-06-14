@@ -97,24 +97,16 @@ export class UserRepository {
     if (Object.keys(patch).length === 0) throw badRequest('At least one field must be provided');
 
     const client = await pgPool.connect();
-    const sets: string[] = [];
-    const params: unknown[] = [];
-    if (patch.name !== undefined) {
-      params.push(patch.name);
-      sets.push(`name = $${params.length}`);
-    }
-    if (patch.email !== undefined) {
-      params.push(patch.email.toLowerCase());
-      sets.push(`email = $${params.length}`);
-    }
-    if (patch.password !== undefined) {
-      params.push(await hashPassword(patch.password));
-      sets.push(`password_hash = $${params.length}`);
-    }
-    if (patch.role !== undefined) {
-      params.push(patch.role);
-      sets.push(`role = $${params.length}`);
-    }
+
+    type FieldUpdate = { column: string; value: unknown };
+    const updates: FieldUpdate[] = [];
+    if (patch.name !== undefined) updates.push({ column: 'name', value: patch.name });
+    if (patch.email !== undefined) updates.push({ column: 'email', value: patch.email.toLowerCase() });
+    if (patch.password !== undefined) updates.push({ column: 'password_hash', value: await hashPassword(patch.password) });
+    if (patch.role !== undefined) updates.push({ column: 'role', value: patch.role });
+
+    const sets = updates.map((u, i) => `${u.column} = $${i + 1}`);
+    const params: unknown[] = updates.map(u => u.value);
     params.push(tenantId, userId);
     const tenantParam = params.length - 1;
     const userParam = params.length;
