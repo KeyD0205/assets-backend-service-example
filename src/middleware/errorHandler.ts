@@ -4,8 +4,8 @@ import { AppError } from '../shared/errors.js';
 import { logger } from '../shared/logger.js';
 
 export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction): void {
-  // Handle payload too large errors (413)
-  if (err instanceof Error && err.message.includes('payload too large')) {
+  // Handle payload too large errors (413) — body-parser throws "request entity too large"
+  if (err instanceof Error && (err.message.includes('entity too large') || err.message.includes('payload too large'))) {
     res.status(413).json({
       error: {
         code: 'payload_too_large',
