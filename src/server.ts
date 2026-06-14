@@ -15,9 +15,21 @@ async function main(): Promise<void> {
 
   const shutdown = async (): Promise<void> => {
     logger.info('Shutting down');
-    await new Promise<void>((resolve, reject) => {
-      server.close(err => (err ? reject(err) : resolve()));
-    });
+    // Kill the process after 25 s if server.close() hangs on keep-alive
+    // connections. unref() prevents the timer from keeping the process alive
+    // if everything closes cleanly before the deadline.
+    const killTimer = setTimeout(() => {
+      logger.error('Shutdown timed out — forcing exit');
+      process.exit(1);
+    }, 25_000);
+    killTimer.unref();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.close(err => (err ? reject(err) : resolve()));
+      });
+    } finally {
+      clearTimeout(killTimer);
+    }
     await Promise.allSettled([closePostgres(), closeMongo()]);
     process.exit(0);
   };
