@@ -27,10 +27,10 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
     const token = header.slice('Bearer '.length).trim();
     if (!token) throw unauthorized();
 
-    const payload = jwt.verify(token, env.JWT_SECRET, { 
-      algorithms: ['HS256'], 
-      issuer: 'multi-tenant-asset-service', 
-      audience: 'asset-service-api' 
+    const payload = jwt.verify(token, env.JWT_SECRET, {
+      algorithms: ['HS256'],
+      issuer: env.JWT_ISSUER,
+      audience: env.JWT_AUDIENCE
     }) as Partial<TokenPayload>;
     
     if (!payload.sub || !payload.tenant_id) {

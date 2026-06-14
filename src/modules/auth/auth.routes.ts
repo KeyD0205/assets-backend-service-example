@@ -35,8 +35,8 @@ router.post('/tokens', asyncHandler(async (req, res) => {
       algorithm: 'HS256',
       expiresIn: env.TOKEN_TTL_SECONDS,
       jwtid: randomUUID(),
-      issuer: 'multi-tenant-asset-service',
-      audience: 'asset-service-api'
+      issuer: env.JWT_ISSUER,
+      audience: env.JWT_AUDIENCE
     }
   );
 
